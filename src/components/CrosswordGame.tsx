@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { ArrowLeft, RotateCcw, Lightbulb, Trophy } from 'lucide-react'
 import { recordGameWin } from '../lib/gameStats'
+import { fetchSingleRandomVictoryImage, type BackendImage } from '../lib/api'
 
 interface CrosswordGameProps {
   onBack?: () => void
@@ -177,6 +178,8 @@ const CrosswordGame: React.FC<CrosswordGameProps> = ({ onBack, onShowRewards }) 
   const [showHint, setShowHint] = useState<Record<number, boolean>>({})
   const [currentPuzzle, setCurrentPuzzle] = useState<Clue[]>([])
   const [puzzleTheme, setPuzzleTheme] = useState<string>("")
+  const [victoryImage, setVictoryImage] = useState<BackendImage | null>(null)
+  const [loadingVictoryImage, setLoadingVictoryImage] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[][]>([])
 
   const initializeGame = useCallback(() => {
@@ -185,6 +188,8 @@ const CrosswordGame: React.FC<CrosswordGameProps> = ({ onBack, onShowRewards }) 
     const theme = getPuzzleTheme()
     setCurrentPuzzle(puzzle)
     setPuzzleTheme(theme)
+    setVictoryImage(null)
+    setLoadingVictoryImage(false)
 
     // Create empty grid with all blocked cells
     const newGrid: Cell[][] = Array(GRID_SIZE).fill(null).map(() =>
@@ -325,6 +330,18 @@ const CrosswordGame: React.FC<CrosswordGameProps> = ({ onBack, onShowRewards }) 
       setGameStatus('won')
       // Record the win when player successfully completes the puzzle
       recordGameWin('crossword')
+      
+      // Fetch a victory image
+      setLoadingVictoryImage(true)
+      fetchSingleRandomVictoryImage()
+        .then(image => {
+          setVictoryImage(image)
+          setLoadingVictoryImage(false)
+        })
+        .catch(error => {
+          console.error('Failed to fetch victory image:', error)
+          setLoadingVictoryImage(false)
+        })
     }
   }
 
@@ -446,13 +463,49 @@ const CrosswordGame: React.FC<CrosswordGameProps> = ({ onBack, onShowRewards }) 
             <div className="text-gray-300 mb-4">
               You've completed the crossword puzzle!
             </div>
+            
+            {/* Victory Image */}
+            <div className="mt-4 mb-4">
+              {loadingVictoryImage ? (
+                <div className="flex flex-col items-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400 mb-2"></div>
+                  <p className="text-gray-400 text-sm">Loading your victory reward...</p>
+                </div>
+              ) : victoryImage ? (
+                <div className="bg-gray-800 rounded-lg p-4 max-w-sm mx-auto">
+                  <img
+                    src={victoryImage.url}
+                    alt={victoryImage.title}
+                    className="w-full h-48 object-cover rounded-lg mb-3"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80";
+                    }}
+                  />
+                  <div className="text-center">
+                    <h3 className="text-white font-medium text-sm mb-1">{victoryImage.title}</h3>
+                    {victoryImage.source && (
+                      <p className="text-gray-400 text-xs">via {victoryImage.source}</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-800 rounded-lg p-4 max-w-sm mx-auto">
+                  <div className="w-full h-48 bg-gray-700 rounded-lg flex items-center justify-center mb-3">
+                    <Trophy className="text-yellow-400" size={48} />
+                  </div>
+                  <p className="text-center text-gray-400 text-sm">Your victory deserves celebration!</p>
+                </div>
+              )}
+            </div>
+            
             {onShowRewards && (
               <button
                 onClick={() => onShowRewards('Crossword')}
                 className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 transform hover:scale-105 flex items-center gap-2 mx-auto"
               >
                 <Trophy size={20} />
-                Claim Victory Rewards!
+                View Full Victory Gallery!
               </button>
             )}
           </div>
