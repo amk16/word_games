@@ -103,7 +103,25 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
       
       // Extract images from the response structure
       let images: BackendImage[] = [];
-      if (backendData.sources && Array.isArray(backendData.sources)) {
+      
+      // Handle the /images/collect response structure with "results" object
+      if (backendData.results && typeof backendData.results === 'object') {
+        console.log('✅ Found results object, extracting images...');
+        const configKeys = Object.keys(backendData.results);
+        console.log('📦 Available config keys:', configKeys);
+        
+        for (const configName of configKeys) {
+          const configData = backendData.results[configName];
+          console.log(`📦 Processing config "${configName}":`, configData);
+          
+          if (configData.images && Array.isArray(configData.images)) {
+            console.log(`✅ Found ${configData.images.length} images in config "${configName}"`);
+            images.push(...configData.images);
+          } else if (configData.error) {
+            console.warn(`⚠️ Config "${configName}" had error:`, configData.error);
+          }
+        }
+      } else if (backendData.sources && Array.isArray(backendData.sources)) {
         console.log('✅ Found sources array, extracting images...');
         // If response has sources array, collect all images
         for (const sourceData of backendData.sources) {
