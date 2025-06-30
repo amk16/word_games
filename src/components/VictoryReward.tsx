@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, Star } from 'lucide-react';
-import { fetchAllImages } from '../lib/api';
-import type { BackendImage } from '../lib/api';
+import { ArrowLeft, Lock, Star, Play } from 'lucide-react';
+import { fetchAllImages, fetchAllVideos } from '../lib/api';
+import type { BackendImage, BackendVideo } from '../lib/api';
 import { loadGameStats, type GameStats } from '../lib/gameStats';
 
 interface VictoryRewardProps {
@@ -9,8 +9,13 @@ interface VictoryRewardProps {
   gameName?: string;
 }
 
+// Combined media type for the gallery
+type MediaItem = (BackendImage | BackendVideo) & {
+  type: 'image' | 'video';
+};
+
 const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
-  const [allImages, setAllImages] = useState<BackendImage[]>([]);
+  const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [gameStats, setGameStats] = useState<GameStats>({ totalWins: 0, wordleWins: 0, hangmanWins: 0, crosswordWins: 0 });
@@ -52,109 +57,127 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
       title: "Reward",
       source_url: "",
       source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Victory Crown",
-      source_url: "",
-      source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Champion",
-      source_url: "",
-      source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1540479859555-17af45c78602?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Fireworks",
-      source_url: "",
-      source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Celebration Party",
-      source_url: "",
-      source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1519682337058-a94d519337bc?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Mountain Peak",
-      source_url: "",
-      source: "Unsplash"
-    },
-    {
-      url: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-      title: "Finish Line",
-      source_url: "",
-      source: "Unsplash"
     }
   ];
 
-  // Load all images from backend or use fallback
-  const loadAllImages = async () => {
+  // Fallback videos for when backend is unavailable
+  const fallbackVideos: BackendVideo[] = [
+    {
+      url: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+      title: "Victory Celebration",
+      source_url: "",
+      source: "Sample Videos",
+      thumbnail_url: "https://images.unsplash.com/photo-1540479859555-17af45c78602?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      duration: 30
+    },
+    {
+      url: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_2mb.mp4",
+      title: "Trophy Animation",
+      source_url: "",
+      source: "Sample Videos",
+      thumbnail_url: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      duration: 45
+    },
+    {
+      url: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_5mb.mp4",
+      title: "Confetti Burst",
+      source_url: "",
+      source: "Sample Videos",
+      thumbnail_url: "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      duration: 60
+    }
+  ];
+
+  // Helper function to determine if item is a video
+  const isVideo = (item: MediaItem): item is BackendVideo & { type: 'video' } => {
+    return item.type === 'video';
+  };
+
+  // Load all media from backend or use fallback
+  const loadAllMedia = async () => {
     try {
       setError(null);
-      console.log('🔄 Attempting to fetch images from backend...');
-      const backendData = await fetchAllImages();
-      console.log('📦 Backend response structure:', backendData);
-      console.log('📦 Backend response type:', typeof backendData);
-      console.log('📦 Backend response keys:', Object.keys(backendData || {}));
+      console.log('🔄 Attempting to fetch media from backend...');
       
-      // Extract images from the response structure
+      // Fetch both images and videos in parallel
+      const [imagesResponse, videosResponse] = await Promise.allSettled([
+        fetchAllImages(),
+        fetchAllVideos()
+      ]);
+      
       let images: BackendImage[] = [];
+      let videos: BackendVideo[] = [];
       
-      // Handle the /images/collect response structure with "results" object
-      if (backendData.results && typeof backendData.results === 'object') {
-        console.log('✅ Found results object, extracting images...');
-        const configKeys = Object.keys(backendData.results);
-        console.log('📦 Available config keys:', configKeys);
+      // Process images response
+      if (imagesResponse.status === 'fulfilled') {
+        const imageData = imagesResponse.value;
+        console.log('📦 Images response structure:', imageData);
         
-        for (const configName of configKeys) {
-          const configData = backendData.results[configName];
-          console.log(`📦 Processing config "${configName}":`, configData);
+        if (imageData.results && typeof imageData.results === 'object') {
+          console.log('✅ Found images results object, extracting...');
+          const configKeys = Object.keys(imageData.results);
           
-          if (configData.images && Array.isArray(configData.images)) {
-            console.log(`✅ Found ${configData.images.length} images in config "${configName}"`);
-            images.push(...configData.images);
-          } else if (configData.error) {
-            console.warn(`⚠️ Config "${configName}" had error:`, configData.error);
+          for (const configName of configKeys) {
+            const configData = imageData.results[configName];
+            if (configData.images && Array.isArray(configData.images)) {
+              console.log(`✅ Found ${configData.images.length} images in config "${configName}"`);
+              images.push(...configData.images);
+            }
           }
         }
-      } else if (backendData.sources && Array.isArray(backendData.sources)) {
-        console.log('✅ Found sources array, extracting images...');
-        // If response has sources array, collect all images
-        for (const sourceData of backendData.sources) {
-          console.log('📦 Source data:', sourceData);
-          if (sourceData.images && Array.isArray(sourceData.images)) {
-            console.log(`✅ Found ${sourceData.images.length} images in source`);
-            images.push(...sourceData.images);
-          }
-        }
-      } else if (backendData.images && Array.isArray(backendData.images)) {
-        console.log('✅ Found direct images array');
-        // If response has direct images array
-        images = backendData.images;
       } else {
-        console.log('❌ No images found in expected structure');
-        console.log('📦 Available keys:', Object.keys(backendData || {}));
+        console.error('❌ Failed to fetch images:', imagesResponse.reason);
+      }
+      
+      // Process videos response
+      if (videosResponse.status === 'fulfilled') {
+        const videoData = videosResponse.value;
+        console.log('📦 Videos response structure:', videoData);
+        
+        if (videoData.results && typeof videoData.results === 'object') {
+          console.log('✅ Found videos results object, extracting...');
+          const configKeys = Object.keys(videoData.results);
+          
+          for (const configName of configKeys) {
+            const configData = videoData.results[configName];
+            if (configData.videos && Array.isArray(configData.videos)) {
+              console.log(`✅ Found ${configData.videos.length} videos in config "${configName}"`);
+              videos.push(...configData.videos);
+            }
+          }
+        }
+      } else {
+        console.error('❌ Failed to fetch videos:', videosResponse.reason);
       }
 
-      console.log(`🖼️ Total images extracted: ${images.length}`);
-      if (images.length > 0) {
-        console.log('🖼️ First image sample:', images[0]);
+      // If no media found, use fallbacks
+      if (images.length === 0 && videos.length === 0) {
+        console.log('❌ No media found, using fallbacks');
+        images = fallbackImages;
+        videos = fallbackVideos;
+        setError('Using fallback media - backend unavailable');
       }
 
-      if (images.length === 0) {
-        throw new Error('No images found in backend response');
-      }
+      // Combine and shuffle media
+      const combinedMedia: MediaItem[] = [
+        ...images.map(img => ({ ...img, type: 'image' as const })),
+        ...videos.map(vid => ({ ...vid, type: 'video' as const }))
+      ];
 
-      setAllImages(images);
-      console.log('✅ Successfully loaded images from backend');
+      // Shuffle the combined array for variety
+      const shuffledMedia = combinedMedia.sort(() => Math.random() - 0.5);
+      
+      setAllMedia(shuffledMedia);
+      console.log(`✅ Successfully loaded ${shuffledMedia.length} media items (${images.length} images, ${videos.length} videos)`);
+      
     } catch (err) {
-      console.error('❌ Failed to load images from backend:', err);
-      setError('Using fallback images - backend unavailable');
-      setAllImages(fallbackImages);
+      console.error('❌ Failed to load media from backend:', err);
+      setError('Using fallback media - backend unavailable');
+      const fallbackMedia: MediaItem[] = [
+        ...fallbackImages.map(img => ({ ...img, type: 'image' as const })),
+        ...fallbackVideos.map(vid => ({ ...vid, type: 'video' as const }))
+      ];
+      setAllMedia(fallbackMedia.sort(() => Math.random() - 0.5));
     }
   };
 
@@ -163,15 +186,15 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
       setLoading(true);
       const stats = loadGameStats();
       setGameStats(stats);
-      await loadAllImages();
+      await loadAllMedia();
       setLoading(false);
     };
 
     initializeData();
   }, []);
 
-  const isImageUnlocked = (imageIndex: number): boolean => {
-    return imageIndex < gameStats.totalWins;
+  const isMediaUnlocked = (mediaIndex: number): boolean => {
+    return mediaIndex < gameStats.totalWins * 5; // 5 items unlock per win
   };
 
   if (loading) {
@@ -180,7 +203,7 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <h2 className="text-xl font-bold text-white mb-2">Loading Gallery...</h2>
-          <p className="text-gray-300">Fetching your reward images</p>
+          <p className="text-gray-300">Fetching your reward images and videos</p>
         </div>
       </div>
     );
@@ -200,7 +223,7 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
           </button>
           <div className="text-center">
             <h1 className="text-3xl font-bold text-white">Victory Gallery</h1>
-            <p className="text-gray-400 text-sm">Win games to unlock images • {gameStats.totalWins} / {allImages.length} unlocked</p>
+            <p className="text-gray-400 text-sm">Win games to unlock 5 items each • {Math.min(gameStats.totalWins * 5, allMedia.length)} / {allMedia.length} unlocked</p>
             {error && (
               <p className="text-yellow-400 text-xs mt-1">{error}</p>
             )}
@@ -230,19 +253,21 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
           </div>
         </div>
 
-        {/* Minimalistic Image Grid */}
+        {/* Mixed Media Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {allImages.map((image, index) => {
-            const unlocked = isImageUnlocked(index);
+          {allMedia.map((media, index) => {
+            const unlocked = isMediaUnlocked(index);
+            const mediaIsVideo = isVideo(media);
             
             return (
               <div
                 key={index}
                 className="relative aspect-square bg-gray-800 rounded-lg overflow-hidden group"
               >
+                {/* Media content */}
                 <img
-                  src={unlocked ? image.url : ''}
-                  alt={unlocked ? image.title : 'Locked'}
+                  src={unlocked ? (mediaIsVideo ? media.thumbnail_url || media.url : media.url) : ''}
+                  alt={unlocked ? media.title : 'Locked'}
                   className={`w-full h-full object-cover transition-all duration-300 ${
                     unlocked 
                       ? 'opacity-100 group-hover:scale-105' 
@@ -255,13 +280,35 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
                     }
                   }}
                 />
+
+                {/* Video play button overlay */}
+                {unlocked && mediaIsVideo && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                    <div className="bg-white/90 rounded-full p-3">
+                      <Play className="text-gray-900" size={24} fill="currentColor" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Media type indicator */}
+                {unlocked && (
+                  <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className={`px-2 py-1 rounded text-xs font-medium ${
+                      mediaIsVideo 
+                        ? 'bg-red-500/80 text-white' 
+                        : 'bg-blue-500/80 text-white'
+                    }`}>
+                      {mediaIsVideo ? 'VIDEO' : 'IMAGE'}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Locked overlay */}
                 {!unlocked && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                     <div className="text-center">
                       <Lock className="text-gray-500 mx-auto mb-2" size={32} />
-                      <p className="text-gray-500 text-xs">Win {index + 1} game{index + 1 > 1 ? 's' : ''}</p>
+                      <p className="text-gray-500 text-xs">Win {Math.ceil((index + 1) / 5)} game{Math.ceil((index + 1) / 5) > 1 ? 's' : ''}</p>
                     </div>
                   </div>
                 )}
@@ -273,12 +320,15 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
                   </div>
                 )}
 
-                {/* Image info on hover */}
+                {/* Media info on hover */}
                 {unlocked && (
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-white text-sm font-medium truncate">{image.title}</p>
-                    {image.source && (
-                      <p className="text-gray-300 text-xs">{image.source}</p>
+                    <p className="text-white text-sm font-medium truncate">{media.title}</p>
+                    {media.source && (
+                      <p className="text-gray-300 text-xs">{media.source}</p>
+                    )}
+                    {mediaIsVideo && media.duration && (
+                      <p className="text-gray-300 text-xs">{Math.round(media.duration)}s</p>
                     )}
                   </div>
                 )}
@@ -292,7 +342,7 @@ const VictoryReward: React.FC<VictoryRewardProps> = ({ onBack }) => {
           <div className="text-center mt-12 p-8">
             <Lock className="text-gray-600 mx-auto mb-4" size={48} />
             <h3 className="text-xl font-bold text-white mb-2">Start Your Victory Journey</h3>
-            <p className="text-gray-400">Win your first game to unlock your first reward image!</p>
+            <p className="text-gray-400">Win your first game to unlock your first 5 reward items!</p>
           </div>
         )}
       </div>
